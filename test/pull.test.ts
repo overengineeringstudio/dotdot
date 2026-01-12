@@ -7,12 +7,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import * as PlatformNode from '@effect/platform-node'
-import { Effect, Layer } from 'effect'
+import { Effect, Layer, Option } from 'effect'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { pullCommand } from '../src/commands/mod.ts'
 import { CurrentWorkingDirectory } from '../src/lib/mod.ts'
-import { createWorkspace, cleanupWorkspace, createBareRepo, getGitRev } from './fixtures/setup.ts'
+import { cleanupWorkspace, createBareRepo, createWorkspace, getGitRev } from './fixtures/setup.ts'
 
 describe('pull command', () => {
   let workspacePath: string
@@ -40,21 +40,33 @@ describe('pull command', () => {
 
     // Clone the repo manually
     const repoPath = path.join(workspacePath, 'pullable-repo')
-    execSync(`git clone ${bareRepoPath} pullable-repo`, { cwd: workspacePath, stdio: 'ignore' })
+    execSync(`git clone ${bareRepoPath} pullable-repo`, {
+      cwd: workspacePath,
+      stdio: 'ignore',
+    })
 
     const initialRev = getGitRev(repoPath)
 
     // Add a new commit to the bare repo via a temp clone
     const tempClone = path.join(workspacePath, 'temp-clone')
-    execSync(`git clone ${bareRepoPath} temp-clone`, { cwd: workspacePath, stdio: 'ignore' })
+    execSync(`git clone ${bareRepoPath} temp-clone`, {
+      cwd: workspacePath,
+      stdio: 'ignore',
+    })
     fs.writeFileSync(path.join(tempClone, 'new-file.txt'), 'new content\n')
     execSync('git add .', { cwd: tempClone, stdio: 'ignore' })
-    execSync('git commit -m "Remote commit"', { cwd: tempClone, stdio: 'ignore' })
+    execSync('git commit -m "Remote commit"', {
+      cwd: tempClone,
+      stdio: 'ignore',
+    })
     execSync('git push', { cwd: tempClone, stdio: 'ignore' })
     fs.rmSync(tempClone, { recursive: true, force: true })
 
     await Effect.gen(function* () {
-      yield* pullCommand.handler({})
+      yield* pullCommand.handler({
+        mode: 'parallel',
+        maxParallel: Option.none(),
+      })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -80,7 +92,10 @@ describe('pull command', () => {
 
     // Should complete without error (skipping dirty repo)
     await Effect.gen(function* () {
-      yield* pullCommand.handler({})
+      yield* pullCommand.handler({
+        mode: 'parallel',
+        maxParallel: Option.none(),
+      })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -104,7 +119,10 @@ describe('pull command', () => {
 
     // Should complete without error (skipping repo without remote)
     await Effect.gen(function* () {
-      yield* pullCommand.handler({})
+      yield* pullCommand.handler({
+        mode: 'parallel',
+        maxParallel: Option.none(),
+      })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -124,7 +142,10 @@ describe('pull command', () => {
     })
 
     await Effect.gen(function* () {
-      yield* pullCommand.handler({})
+      yield* pullCommand.handler({
+        mode: 'parallel',
+        maxParallel: Option.none(),
+      })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -147,7 +168,10 @@ describe('pull command', () => {
     })
 
     await Effect.gen(function* () {
-      yield* pullCommand.handler({})
+      yield* pullCommand.handler({
+        mode: 'parallel',
+        maxParallel: Option.none(),
+      })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(

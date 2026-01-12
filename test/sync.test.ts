@@ -1,19 +1,19 @@
 /**
- * Tests for dotdot restore command
+ * Tests for dotdot sync command
  */
 
 import fs from 'node:fs'
 import path from 'node:path'
 
 import * as PlatformNode from '@effect/platform-node'
-import { Effect, Layer } from 'effect'
+import { Effect, Layer, Option } from 'effect'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { restoreCommand } from '../src/commands/mod.ts'
+import { syncCommand } from '../src/commands/mod.ts'
 import { CurrentWorkingDirectory } from '../src/lib/mod.ts'
-import { createWorkspace, cleanupWorkspace, createBareRepo, getGitRev } from './fixtures/setup.ts'
+import { cleanupWorkspace, createBareRepo, createWorkspace, getGitRev } from './fixtures/setup.ts'
 
-describe('restore command', () => {
+describe('sync command', () => {
   let workspacePath: string
   let bareRepoPath: string
 
@@ -27,7 +27,7 @@ describe('restore command', () => {
     }
   })
 
-  it('restores missing repo', async () => {
+  it('syncs missing repo', async () => {
     bareRepoPath = createBareRepo('missing-repo')
 
     workspacePath = createWorkspace({
@@ -38,7 +38,11 @@ describe('restore command', () => {
     })
 
     await Effect.gen(function* () {
-      yield* restoreCommand.handler({ dryRun: false })
+      yield* syncCommand.handler({
+        dryRun: false,
+        mode: 'sequential',
+        maxParallel: Option.none(),
+      })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -68,7 +72,11 @@ describe('restore command', () => {
     const originalRev = getGitRev(path.join(workspacePath, 'existing-repo'))
 
     await Effect.gen(function* () {
-      yield* restoreCommand.handler({ dryRun: false })
+      yield* syncCommand.handler({
+        dryRun: false,
+        mode: 'sequential',
+        maxParallel: Option.none(),
+      })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -95,7 +103,11 @@ describe('restore command', () => {
     })
 
     await Effect.gen(function* () {
-      yield* restoreCommand.handler({ dryRun: true })
+      yield* syncCommand.handler({
+        dryRun: true,
+        mode: 'sequential',
+        maxParallel: Option.none(),
+      })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -111,7 +123,7 @@ describe('restore command', () => {
     expect(fs.existsSync(repoPath)).toBe(false)
   })
 
-  it('reports nothing to restore when all repos exist', async () => {
+  it('reports nothing to sync when all repos exist', async () => {
     workspacePath = createWorkspace({
       rootRepos: {
         'repo-a': { url: 'git@github.com:test/repo-a.git' },
@@ -121,7 +133,11 @@ describe('restore command', () => {
 
     // Should complete without error
     await Effect.gen(function* () {
-      yield* restoreCommand.handler({ dryRun: false })
+      yield* syncCommand.handler({
+        dryRun: false,
+        mode: 'sequential',
+        maxParallel: Option.none(),
+      })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -141,7 +157,11 @@ describe('restore command', () => {
     })
 
     await Effect.gen(function* () {
-      yield* restoreCommand.handler({ dryRun: false })
+      yield* syncCommand.handler({
+        dryRun: false,
+        mode: 'sequential',
+        maxParallel: Option.none(),
+      })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(

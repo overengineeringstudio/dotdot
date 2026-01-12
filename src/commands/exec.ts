@@ -8,14 +8,16 @@ import path from 'node:path'
 
 import * as Cli from '@effect/cli'
 import { FileSystem } from '@effect/platform'
-import { Effect, Schema } from 'effect'
+import { Effect, Option, Schema } from 'effect'
 
 import {
-  collectAllConfigs,
   CurrentWorkingDirectory,
+  collectAllConfigs,
+  type ExecutionMode,
+  executeForAll,
   findWorkspaceRoot,
-  runShellCommand,
   type RepoConfig,
+  runShellCommand,
 } from '../lib/mod.ts'
 
 /** Error during exec operation */
@@ -35,7 +37,11 @@ type ExecResult = {
 
 /** Collect all declared repos from configs */
 const collectDeclaredRepos = (
-  configs: Array<{ config: { repos: Record<string, RepoConfig> }; isRoot: boolean; dir: string }>,
+  configs: Array<{
+    config: { repos: Record<string, RepoConfig> }
+    isRoot: boolean
+    dir: string
+  }>,
 ) => {
   const repos = new Map<string, RepoConfig>()
 
@@ -58,8 +64,16 @@ export const execCommand = Cli.Command.make(
     command: Cli.Args.text({ name: 'command' }).pipe(
       Cli.Args.withDescription('Command to run in each repo'),
     ),
+    mode: Cli.Options.choice('mode', ['parallel', 'sequential'] as const).pipe(
+      Cli.Options.withDescription('Execution mode: parallel or sequential'),
+      Cli.Options.withDefault('sequential' as ExecutionMode),
+    ),
+    maxParallel: Cli.Options.integer('max-parallel').pipe(
+      Cli.Options.withDescription('Maximum parallel operations (only for parallel mode)'),
+      Cli.Options.optional,
+    ),
   },
-  ({ command }) =>
+  ({ command, mode, maxParallel }) =>
     Effect.gen(function* () {
       const cwd = yield* CurrentWorkingDirectory
       const fs = yield* FileSystem.FileSystem
@@ -68,6 +82,7 @@ export const execCommand = Cli.Command.make(
 
       yield* Effect.log(`dotdot workspace: ${workspaceRoot}`)
       yield* Effect.log(`Running: ${command}`)
+      yield* Effect.log(`Execution mode: ${mode}`)
       yield* Effect.log('')
 
       const configs = yield* collectAllConfigs(workspaceRoot)
@@ -78,40 +93,48 @@ export const execCommand = Cli.Command.make(
         return
       }
 
-      const results: ExecResult[] = []
+      const repoNames = Array.from(declaredRepos.keys())
 
-      for (const [name] of declaredRepos.entries()) {
-        const repoPath = path.join(workspaceRoot, name)
+      const results = yield* executeForAll(
+        repoNames,
+        (name) =>
+          Effect.gen(function* () {
+            const repoPath = path.join(workspaceRoot, name)
 
-        // Check if repo exists
-        const exists = yield* fs.exists(repoPath)
-        if (!exists) {
-          yield* Effect.log(`[${name}] Skipped (directory does not exist)`)
-          results.push({ name, status: 'skipped', message: 'Directory does not exist' })
-          continue
-        }
+            // Check if repo exists
+            const exists = yield* fs.exists(repoPath)
+            if (!exists) {
+              yield* Effect.log(`[${name}] Skipped (directory does not exist)`)
+              return {
+                name,
+                status: 'skipped' as const,
+                message: 'Directory does not exist',
+              }
+            }
 
-        yield* Effect.log(`[${name}] Running...`)
+            yield* Effect.log(`[${name}] Running...`)
 
-        const result = yield* runShellCommand(command, repoPath).pipe(
-          Effect.map(() => ({ name, status: 'success' as const })),
-          Effect.catchAll((error) =>
-            Effect.succeed({
-              name,
-              status: 'failed' as const,
-              message: error instanceof Error ? error.message : String(error),
-            }),
-          ),
-        )
+            const result = yield* runShellCommand(command, repoPath).pipe(
+              Effect.map(() => ({ name, status: 'success' as const })),
+              Effect.catchAll((error) =>
+                Effect.succeed({
+                  name,
+                  status: 'failed' as const,
+                  message: error instanceof Error ? error.message : String(error),
+                }),
+              ),
+            )
 
-        results.push(result)
+            if (result.status === 'success') {
+              yield* Effect.log(`[${name}] Done`)
+            } else {
+              yield* Effect.log(`[${name}] Failed: ${result.message}`)
+            }
 
-        if (result.status === 'success') {
-          yield* Effect.log(`[${name}] Done`)
-        } else {
-          yield* Effect.log(`[${name}] Failed: ${result.message}`)
-        }
-      }
+            return result
+          }),
+        { mode, maxParallel: Option.getOrUndefined(maxParallel) },
+      )
 
       yield* Effect.log('')
 

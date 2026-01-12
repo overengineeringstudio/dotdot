@@ -1,7 +1,7 @@
 /**
  * Config file loader
  *
- * Dynamically imports dotdot.config.ts files
+ * Loads and parses dotdot.json config files
  */
 
 import path from 'node:path'
@@ -9,7 +9,7 @@ import path from 'node:path'
 import { FileSystem } from '@effect/platform'
 import { Effect, Schema } from 'effect'
 
-import { CONFIG_FILE_NAME, DotdotConfigSchema, type DotdotConfig } from './config.ts'
+import { CONFIG_FILE_NAME, type DotdotConfig, DotdotConfigSchema } from './config.ts'
 
 /** Error when config file is invalid */
 export class ConfigError extends Schema.TaggedError<ConfigError>()('ConfigError', {
@@ -30,23 +30,34 @@ export type ConfigSource = {
   config: DotdotConfig
 }
 
-/** Load and parse a dotdot.config.ts file */
+/** Load and parse a dotdot.json file */
 export const loadConfigFile = (configPath: string) =>
   Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
     const absolutePath = path.resolve(configPath)
 
-    // Dynamically import the config file
-    const module = yield* Effect.tryPromise({
-      try: () => import(absolutePath),
+    // Read the JSON file
+    const content = yield* fs.readFileString(absolutePath).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ConfigError({
+            path: absolutePath,
+            message: `Failed to read config file`,
+            cause,
+          }),
+      ),
+    )
+
+    // Parse JSON
+    const rawConfig = yield* Effect.try({
+      try: () => JSON.parse(content),
       catch: (cause) =>
         new ConfigError({
           path: absolutePath,
-          message: `Failed to import config file`,
+          message: `Failed to parse JSON`,
           cause: cause as Error,
         }),
     })
-
-    const rawConfig = module.default
 
     // Validate against schema
     const config = yield* Schema.decodeUnknown(DotdotConfigSchema)(rawConfig).pipe(
@@ -63,7 +74,7 @@ export const loadConfigFile = (configPath: string) =>
     return config
   }).pipe(Effect.withSpan('loader/loadConfigFile'))
 
-/** Find the workspace root (directory containing dotdot.config.ts) */
+/** Find the workspace root (directory containing dotdot.json) */
 export const findWorkspaceRoot = (startDir: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem

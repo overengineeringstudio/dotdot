@@ -11,10 +11,15 @@ mkBunCli {
   binaryName = "dotdot";
   packageJsonPath = "dotdot/package.json";
   typecheckTsconfig = "dotdot/tsconfig.json";
+  sources = [
+    { name = "dotdot"; src = src; }
+    { name = "effect-utils"; src = ../../effect-utils; }
+  ];
+  installDirs = [
+    "dotdot"
+    "effect-utils/packages/@overeng/utils"
+  ];
   # Hash will need to be updated after first bun install
   bunDepsHash = pkgs.lib.fakeHash;
-  workspaceDeps = [
-    { name = "@overeng/utils"; path = "effect-utils/packages/@overeng/utils"; }
-  ];
   inherit gitRev;
 }

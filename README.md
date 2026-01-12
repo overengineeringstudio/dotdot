@@ -4,15 +4,25 @@ Opinionated multi-repo workspace management CLI - an alternative to Git submodul
 
 ## Status
 
-**Early development** - Core infrastructure and `status` command implemented.
+**Early development** - Core commands implemented, documentation in progress.
 
-## Overview
+## Why dotdot?
 
-dotdot provides an opinionated way to:
-- Manage multiple git repos as flat peers in a workspace
-- Track dependencies between repos with revision pinning
-- Share repo configurations across the workspace
-- Work with tools like pnpm, bun, and nix flakes
+Existing tools for managing multiple repos have significant trade-offs:
+
+| Approach | Pain points |
+|----------|-------------|
+| **Git submodules** | Nested repos, complex commands, detached HEAD, merge conflicts in pointers |
+| **Monorepo** (pnpm/yarn workspaces) | Single git repo for everything, can't mix ecosystems, large clones |
+| **Monorepo orchestrators** (nx, turborepo) | Complex setup, monorepo-centric, heavy tooling |
+| **Manual scripts** | No dependency tracking, no reproducibility, reinventing the wheel |
+
+dotdot takes a different approach: **flat peer repos with simple `../` paths**.
+
+- Each repo stays independent (separate git history, access control, CI)
+- Dependencies are declared per-repo and deduplicated at workspace level
+- Topological execution for builds without complex configuration
+- Works with any ecosystem (bun, cargo, nix flakes)
 
 ## Quick Start
 
@@ -21,121 +31,73 @@ dotdot provides an opinionated way to:
 mkdir my-workspace && cd my-workspace
 dotdot init
 
-# This creates:
-# - .dotdot/          (workspace marker)
-# - dotdot.config.ts  (root configuration)
-
 # Check workspace status
 dotdot status
+
+# Clone all declared dependencies
+dotdot sync
+
+# Run a command across all repos
+dotdot exec -- pnpm build
 ```
 
 ## Workspace Structure
 
 ```
 my-workspace/
-├── .dotdot/              # Workspace marker directory
-├── dotdot.config.ts      # Root configuration
-├── repo-a/               # Peer repo
-│   └── dotdot.config.ts  # Optional: repo's own dependencies
-├── repo-b/               # Peer repo
-└── repo-c/               # Peer repo
+├── dotdot.generated.json           # Workspace config (also serves as marker)
+├── repo-a/
+│   ├── .git/
+│   └── dotdot.json       # Declares dependencies (optional)
+├── repo-b/
+│   ├── .git/
+│   └── dotdot.json
+└── shared-lib/           # Shared dependency (deduplicated)
+    └── .git/
 ```
+
+All repos are flat peers. See [Core Concepts](./docs/concepts.md) for details.
 
 ## Configuration
 
-dotdot uses TypeScript configuration files for type safety and IDE support.
+Dependencies are declared in `dotdot.json` (language-agnostic JSON format):
 
-```typescript
-// dotdot.config.ts
-import { defineConfig } from 'dotdot'
-
-export default defineConfig({
-  repos: {
-    'effect-utils': {
-      url: 'git@github.com:org/effect-utils.git',
-      rev: 'abc123...',  // Optional: pinned revision
-    },
-    'shared-types': {
-      url: 'git@github.com:org/shared-types.git',
-      expose: ['packages/types'],  // Optional: symlink paths to root
-    },
-  },
-})
-```
-
-### Repo Config Schema
-
-```typescript
-type RepoConfig = {
-  url: string                // Git remote URL
-  rev?: string              // Pinned revision (commit SHA)
-  install?: string          // Post-clone install command
-  expose?: string[]         // Paths to symlink to workspace root
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/overengineeringstudio/dotdot/main/schema/dotdot.schema.json",
+  "repos": {
+    "shared-lib": {
+      "url": "git@github.com:org/shared-lib.git",
+      "rev": "abc123...",
+      "install": "pnpm install"
+    }
+  }
 }
 ```
 
+See [Core Concepts](./docs/concepts.md) for all configuration options.
+
 ## Commands
 
-### `dotdot init`
+| Command | Description |
+|---------|-------------|
+| `dotdot init` | Initialize workspace (creates `dotdot.json`) |
+| `dotdot status` | Show repo states and revision status |
+| `dotdot sync` | Clone missing repos, checkout pinned revisions |
+| `dotdot update-revs` | Pin current HEAD revisions to configs |
+| `dotdot pull` | Pull all repos from remotes |
+| `dotdot tree` | Show dependency tree, detect conflicts |
+| `dotdot link` | Create symlinks from `packages` configs |
+| `dotdot exec` | Run command in all repos (topological order) |
+| `dotdot schema` | Generate JSON schema file |
 
-Initialize a new workspace in the current directory.
+See [Commands](./docs/commands.md) for full reference including execution modes.
 
-```bash
-dotdot init
-```
+## Documentation
 
-Creates `.dotdot/` directory and `dotdot.config.ts` file.
-
-### `dotdot status`
-
-Show the status of all repos in the workspace.
-
-```bash
-dotdot status
-```
-
-Output example:
-```
-dotdot workspace: /path/to/workspace
-
-Declared repos (3):
-  repo-a: main@abc1234
-  repo-b: main@def5678 *dirty* [diverged from old1234]
-  missing-repo: MISSING
-
-Undeclared repos (1):
-  extra-repo: feature@ghi9012 [not in config]
-```
-
-Status indicators:
-- `*dirty*` - Working tree has uncommitted changes
-- `[diverged from xxx]` - Current revision doesn't match pinned revision
-- `[no pin]` - No revision pinned in config
-- `MISSING` - Declared but directory doesn't exist
-- `[not in config]` - Git repo exists but not declared in any config
-
-### `dotdot clone` (planned)
-
-Clone a repo into the workspace.
-
-### `dotdot restore` (planned)
-
-Clone all declared repos that are missing.
-
-### `dotdot update` (planned)
-
-Update pinned revisions to current HEAD.
-
-## Design Documents
-
-- [Core Concepts](./design/concepts.md) - Workspace, repos, configuration
-- [Commands](./design/commands.md) - CLI command reference
-- [Workflows](./design/workflows.md) - Common usage patterns
-- [Opinions](./design/opinions.md) - Design decisions and rationale
-
-## Tech Stack
-
-- **Runtime**: Bun
-- **CLI Framework**: @effect/cli
-- **Platform**: @effect/platform-node
-- **Build**: Nix flakes
+- [Core Concepts](./docs/concepts.md) - Workspace, repos, configuration, expose
+- [Commands](./docs/commands.md) - CLI reference with execution modes
+- [Workflows](./docs/workflows.md) - Common usage patterns
+- [Design Decisions](./docs/design-decisions.md) - Rationale and trade-offs
+- [Using with Bun](./docs/usage-patterns/bun.md) - Configuration for Bun package manager
+- [Using with Genie](./docs/usage-patterns/genie.md) - Cross-repo config generation

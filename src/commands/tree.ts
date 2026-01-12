@@ -8,17 +8,17 @@ import * as Cli from '@effect/cli'
 import { Effect } from 'effect'
 
 import {
-  collectAllConfigs,
-  CurrentWorkingDirectory,
-  findWorkspaceRoot,
   type ConfigSource,
+  CurrentWorkingDirectory,
+  collectAllConfigs,
+  findWorkspaceRoot,
 } from '../lib/mod.ts'
 
 /** Dependency info for a repo */
 type RepoDependency = {
   name: string
   declaredIn: string[]
-  revision?: string | undefined
+  rev?: string | undefined
   conflicts: boolean
   conflictingRevs?: string[] | undefined
 }
@@ -35,19 +35,19 @@ const buildDependencyMap = (configs: ConfigSource[]) => {
       if (existing) {
         existing.declaredIn.push(sourceName)
 
-        // Check for revision conflicts
-        if (config.revision && existing.revision && config.revision !== existing.revision) {
+        // Check for rev conflicts
+        if (config.rev && existing.rev && config.rev !== existing.rev) {
           existing.conflicts = true
-          existing.conflictingRevs = existing.conflictingRevs ?? [existing.revision]
-          if (!existing.conflictingRevs.includes(config.revision)) {
-            existing.conflictingRevs.push(config.revision)
+          existing.conflictingRevs = existing.conflictingRevs ?? [existing.rev]
+          if (!existing.conflictingRevs.includes(config.rev)) {
+            existing.conflictingRevs.push(config.rev)
           }
         }
       } else {
         deps.set(name, {
           name,
           declaredIn: [sourceName],
-          revision: config.revision,
+          rev: config.rev,
           conflicts: false,
         })
       }
@@ -92,7 +92,7 @@ const formatTree = (configs: ConfigSource[], deps: Map<string, RepoDependency>) 
         const dep = deps.get(name)!
         const isLast = i === rootDeps.length - 1
         const prefix = isLast ? '└── ' : '├── '
-        const revInfo = dep.revision ? ` @ ${dep.revision.slice(0, 7)}` : ''
+        const revInfo = dep.rev ? ` @ ${dep.rev.slice(0, 7)}` : ''
         const conflictWarning = dep.conflicts ? ' [CONFLICT]' : ''
         yield* Effect.log(`${prefix}${name}${revInfo}${conflictWarning}`)
       }
@@ -113,7 +113,7 @@ const formatTree = (configs: ConfigSource[], deps: Map<string, RepoDependency>) 
           const dep = deps.get(name)!
           const isLast = i === repoDeps.length - 1
           const prefix = isLast ? '└── ' : '├── '
-          const revInfo = dep.revision ? ` @ ${dep.revision.slice(0, 7)}` : ''
+          const revInfo = dep.rev ? ` @ ${dep.rev.slice(0, 7)}` : ''
           const conflictWarning = dep.conflicts ? ' [CONFLICT]' : ''
           yield* Effect.log(`${prefix}${name}${revInfo}${conflictWarning}`)
         }

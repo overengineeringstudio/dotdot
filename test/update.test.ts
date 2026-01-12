@@ -9,14 +9,14 @@ import * as PlatformNode from '@effect/platform-node'
 import { Effect, Layer } from 'effect'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { updateCommand } from '../src/commands/mod.ts'
+import { updateRevsCommand } from '../src/commands/mod.ts'
 import { CurrentWorkingDirectory } from '../src/lib/mod.ts'
 import {
-  createWorkspace,
-  cleanupWorkspace,
   addCommit,
-  readConfig,
+  cleanupWorkspace,
+  createWorkspace,
   getGitRev,
+  readConfig,
 } from './fixtures/setup.ts'
 
 describe('update command', () => {
@@ -39,22 +39,25 @@ describe('update command', () => {
     const oldRev = getGitRev(path.join(workspacePath, 'repo-a'))
 
     // Update config with old rev
-    const configPath = path.join(workspacePath, 'dotdot.config.ts')
+    const configPath = path.join(workspacePath, 'dotdot.json')
     fs.writeFileSync(
       configPath,
-      `export default {
-  repos: {
-    'repo-a': { url: 'git@github.com:test/repo-a.git', revision: '${oldRev}' }
-  },
-}
-`,
+      JSON.stringify(
+        {
+          repos: {
+            'repo-a': { url: 'git@github.com:test/repo-a.git', rev: oldRev },
+          },
+        },
+        null,
+        2,
+      ) + '\n',
     )
 
     // Add new commit
     const newRev = addCommit(path.join(workspacePath, 'repo-a'), 'New commit')
 
     await Effect.gen(function* () {
-      yield* updateCommand.handler({ repos: [], dryRun: false })
+      yield* updateRevsCommand.handler({ repos: [], dryRun: false })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -67,8 +70,8 @@ describe('update command', () => {
 
     // Check config was updated
     const config = readConfig(workspacePath)
-    expect(config).toContain(`revision: '${newRev}'`)
-    expect(config).not.toContain(`revision: '${oldRev}'`)
+    expect(config).toContain(`"rev": "${newRev}"`)
+    expect(config).not.toContain(`"rev": "${oldRev}"`)
   })
 
   it('updates only specified repos', async () => {
@@ -87,16 +90,19 @@ describe('update command', () => {
     const oldRevB = getGitRev(path.join(workspacePath, 'repo-b'))
 
     // Update config with old revs
-    const configPath = path.join(workspacePath, 'dotdot.config.ts')
+    const configPath = path.join(workspacePath, 'dotdot.json')
     fs.writeFileSync(
       configPath,
-      `export default {
-  repos: {
-    'repo-a': { url: 'git@github.com:test/repo-a.git', revision: '${oldRevA}' },
-    'repo-b': { url: 'git@github.com:test/repo-b.git', revision: '${oldRevB}' }
-  },
-}
-`,
+      JSON.stringify(
+        {
+          repos: {
+            'repo-a': { url: 'git@github.com:test/repo-a.git', rev: oldRevA },
+            'repo-b': { url: 'git@github.com:test/repo-b.git', rev: oldRevB },
+          },
+        },
+        null,
+        2,
+      ) + '\n',
     )
 
     // Add new commits to both
@@ -105,7 +111,7 @@ describe('update command', () => {
 
     // Only update repo-a
     await Effect.gen(function* () {
-      yield* updateCommand.handler({ repos: ['repo-a'], dryRun: false })
+      yield* updateRevsCommand.handler({ repos: ['repo-a'], dryRun: false })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -118,8 +124,8 @@ describe('update command', () => {
 
     // Check only repo-a was updated
     const config = readConfig(workspacePath)
-    expect(config).toContain(`revision: '${newRevA}'`)
-    expect(config).toContain(`revision: '${oldRevB}'`) // B should still have old rev
+    expect(config).toContain(`"rev": "${newRevA}"`)
+    expect(config).toContain(`"rev": "${oldRevB}"`) // B should still have old rev
   })
 
   it('dry run does not modify config', async () => {
@@ -132,22 +138,25 @@ describe('update command', () => {
 
     const oldRev = getGitRev(path.join(workspacePath, 'repo-a'))
 
-    const configPath = path.join(workspacePath, 'dotdot.config.ts')
+    const configPath = path.join(workspacePath, 'dotdot.json')
     fs.writeFileSync(
       configPath,
-      `export default {
-  repos: {
-    'repo-a': { url: 'git@github.com:test/repo-a.git', revision: '${oldRev}' }
-  },
-}
-`,
+      JSON.stringify(
+        {
+          repos: {
+            'repo-a': { url: 'git@github.com:test/repo-a.git', rev: oldRev },
+          },
+        },
+        null,
+        2,
+      ) + '\n',
     )
 
     // Add new commit
     addCommit(path.join(workspacePath, 'repo-a'), 'New commit')
 
     await Effect.gen(function* () {
-      yield* updateCommand.handler({ repos: [], dryRun: true })
+      yield* updateRevsCommand.handler({ repos: [], dryRun: true })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -160,7 +169,7 @@ describe('update command', () => {
 
     // Check config was NOT updated
     const config = readConfig(workspacePath)
-    expect(config).toContain(`revision: '${oldRev}'`)
+    expect(config).toContain(`"rev": "${oldRev}"`)
   })
 
   it('skips repos that do not exist', async () => {
@@ -173,7 +182,7 @@ describe('update command', () => {
 
     // Should complete without error
     await Effect.gen(function* () {
-      yield* updateCommand.handler({ repos: [], dryRun: false })
+      yield* updateRevsCommand.handler({ repos: [], dryRun: false })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -197,20 +206,26 @@ describe('update command', () => {
 
     const currentRev = getGitRev(path.join(workspacePath, 'repo-a'))
 
-    const configPath = path.join(workspacePath, 'dotdot.config.ts')
+    const configPath = path.join(workspacePath, 'dotdot.json')
     fs.writeFileSync(
       configPath,
-      `export default {
-  repos: {
-    'repo-a': { url: 'git@github.com:test/repo-a.git', revision: '${currentRev}' }
-  },
-}
-`,
+      JSON.stringify(
+        {
+          repos: {
+            'repo-a': {
+              url: 'git@github.com:test/repo-a.git',
+              rev: currentRev,
+            },
+          },
+        },
+        null,
+        2,
+      ) + '\n',
     )
 
     // Should complete without error, reporting unchanged
     await Effect.gen(function* () {
-      yield* updateCommand.handler({ repos: [], dryRun: false })
+      yield* updateRevsCommand.handler({ repos: [], dryRun: false })
     }).pipe(
       Effect.provide(
         Layer.mergeAll(

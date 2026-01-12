@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { treeCommand } from '../src/commands/mod.ts'
 import { CurrentWorkingDirectory } from '../src/lib/mod.ts'
-import { createWorkspace, cleanupWorkspace, getGitRev } from './fixtures/setup.ts'
+import { cleanupWorkspace, createWorkspace, getGitRev } from './fixtures/setup.ts'
 
 describe('tree command', () => {
   let workspacePath: string
@@ -104,7 +104,7 @@ describe('tree command', () => {
       rootRepos: {
         'shared-repo': {
           url: 'git@github.com:test/shared-repo.git',
-          revision: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1',
+          rev: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1',
         },
       },
       repos: [
@@ -116,7 +116,7 @@ describe('tree command', () => {
           configRepos: {
             'shared-repo': {
               url: 'git@github.com:test/shared-repo.git',
-              revision: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2',
+              rev: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2',
             },
           },
         },
@@ -143,7 +143,7 @@ describe('tree command', () => {
       rootRepos: {
         'shared-repo': {
           url: 'git@github.com:test/shared-repo.git',
-          revision: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1',
+          rev: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1',
         },
       },
       repos: [
@@ -155,7 +155,7 @@ describe('tree command', () => {
           configRepos: {
             'shared-repo': {
               url: 'git@github.com:test/shared-repo.git',
-              revision: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2',
+              rev: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2',
             },
           },
         },

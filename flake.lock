@@ -1,5 +1,31 @@
 {
   "nodes": {
+    "effect-utils": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "nixpkgsUnstable": [
+          "nixpkgsUnstable"
+        ]
+      },
+      "locked": {
+        "lastModified": 1768203055,
+        "narHash": "sha256-sSF+xXwZh1z+Z9fyFx/ghpbRTaPghTg22Fe1daD9dcc=",
+        "owner": "overengineeringstudio",
+        "repo": "effect-utils",
+        "rev": "6701344f84f6ba1656d57545b6e57f4d1cfa2338",
+        "type": "github"
+      },
+      "original": {
+        "owner": "overengineeringstudio",
+        "repo": "effect-utils",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -15,34 +41,6 @@
       "original": {
         "owner": "numtide",
         "repo": "flake-utils",
-        "type": "github"
-      }
-    },
-    "genie": {
-      "inputs": {
-        "flake-utils": [
-          "flake-utils"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "nixpkgsUnstable": [
-          "nixpkgsUnstable"
-        ]
-      },
-      "locked": {
-        "dir": "packages/@overeng/genie",
-        "lastModified": 1768129018,
-        "narHash": "sha256-npb+GOm1pRME+6Iomk7lDHJ6MiImMggaPtY1phdBVec=",
-        "owner": "overengineeringstudio",
-        "repo": "effect-utils",
-        "rev": "3f6251fb01dbfd13f38f011aca66d126a2ad6791",
-        "type": "github"
-      },
-      "original": {
-        "dir": "packages/@overeng/genie",
-        "owner": "overengineeringstudio",
-        "repo": "effect-utils",
         "type": "github"
       }
     },
@@ -80,8 +78,8 @@
     },
     "root": {
       "inputs": {
+        "effect-utils": "effect-utils",
         "flake-utils": "flake-utils",
-        "genie": "genie",
         "nixpkgs": "nixpkgs",
         "nixpkgsUnstable": "nixpkgsUnstable"
       }

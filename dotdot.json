@@ -1,0 +1,13 @@
+{
+	"$schema": "https://raw.githubusercontent.com/overengineeringstudio/dotdot/main/schema/dotdot.schema.json",
+	"repos": {
+		"effect-utils": {
+			"url": "git@github.com:overengineeringstudio/effect-utils.git",
+			"rev": "3f6251fb01dbfd13f38f011aca66d126a2ad6791"
+		},
+		"effect": {
+			"url": "git@github.com:effect-ts/effect.git",
+			"rev": "c9dc711464561227b8470edaa6052056ede41289"
+		}
+	}
+}

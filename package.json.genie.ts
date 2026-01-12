@@ -1,6 +1,8 @@
-import { pkg, privatePackageDefaults } from './genie/repo.ts'
+import { prefixPatchPaths } from '../effect-utils/packages/@overeng/genie/src/runtime/package-json/overrides.ts'
+import utilsPkg from '../effect-utils/packages/@overeng/utils/package.json.genie.ts'
+import { catalog, packageJson, privatePackageDefaults } from './genie/internal.ts'
 
-export default pkg.package({
+export default packageJson({
   name: '@overeng/dotdot',
   ...privatePackageDefaults,
   exports: {
@@ -14,22 +16,21 @@ export default pkg.package({
       './cli': './dist/cli.js',
     },
   },
-  dependencies: ['@overeng/utils'],
-  devDependencies: [
-    '@effect/cli',
-    '@effect/platform',
-    '@effect/platform-node',
-    '@effect/vitest',
-    '@types/node',
-    '@types/bun',
-    'effect',
-    'typescript',
-    'vitest',
-  ],
+  dependencies: {
+    '@overeng/utils': 'file:../effect-utils/packages/@overeng/utils',
+  },
+  devDependencies: {
+    ...utilsPkg.data.peerDependencies,
+    ...catalog.pick('@effect/cli', '@types/bun', '@types/node', 'typescript'),
+  },
   peerDependencies: {
-    '@effect/cli': '^',
-    '@effect/platform': '^',
-    '@effect/platform-node': '^',
-    effect: '^',
+    ...utilsPkg.data.peerDependencies,
+    '@effect/cli': `^${catalog['@effect/cli']}`,
+  },
+  patchedDependencies: {
+    ...prefixPatchPaths({
+      patches: utilsPkg.data.patchedDependencies,
+      prefix: 'effect-utils/',
+    }),
   },
 })

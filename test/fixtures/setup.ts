@@ -15,15 +15,15 @@ export type RepoFixture = {
   isGitRepo?: boolean
   /** Create with dirty working tree */
   isDirty?: boolean
-  /** Has its own dotdot.config.ts */
+  /** Has its own dotdot.json */
   hasConfig?: boolean
   /** Config content if hasConfig */
-  configRepos?: Record<string, { url: string; revision?: string }>
+  configRepos?: Record<string, { url: string; rev?: string }>
 }
 
 export type WorkspaceFixture = {
   /** Root config repos */
-  rootRepos?: Record<string, { url: string; revision?: string }>
+  rootRepos?: Record<string, { url: string; rev?: string }>
   /** Peer repos to create */
   repos: RepoFixture[]
 }
@@ -35,10 +35,13 @@ export const createWorkspace = (fixture: WorkspaceFixture): string => {
   // Create root config if specified
   if (fixture.rootRepos && Object.keys(fixture.rootRepos).length > 0) {
     const configContent = generateConfig(fixture.rootRepos)
-    fs.writeFileSync(path.join(tmpDir, 'dotdot.config.ts'), configContent)
+    fs.writeFileSync(path.join(tmpDir, 'dotdot.json'), configContent)
   } else {
     // Create empty config
-    fs.writeFileSync(path.join(tmpDir, 'dotdot.config.ts'), `export default { repos: {} }\n`)
+    fs.writeFileSync(
+      path.join(tmpDir, 'dotdot.json'),
+      JSON.stringify({ repos: {} }, null, 2) + '\n',
+    )
   }
 
   // Create repos
@@ -49,13 +52,22 @@ export const createWorkspace = (fixture: WorkspaceFixture): string => {
     if (repo.isGitRepo !== false) {
       // Initialize git repo
       execSync('git init', { cwd: repoPath, stdio: 'ignore' })
-      execSync('git config user.email "test@test.com"', { cwd: repoPath, stdio: 'ignore' })
-      execSync('git config user.name "Test"', { cwd: repoPath, stdio: 'ignore' })
+      execSync('git config user.email "test@test.com"', {
+        cwd: repoPath,
+        stdio: 'ignore',
+      })
+      execSync('git config user.name "Test"', {
+        cwd: repoPath,
+        stdio: 'ignore',
+      })
 
       // Create initial commit
       fs.writeFileSync(path.join(repoPath, 'README.md'), `# ${repo.name}\n`)
       execSync('git add .', { cwd: repoPath, stdio: 'ignore' })
-      execSync('git commit -m "Initial commit"', { cwd: repoPath, stdio: 'ignore' })
+      execSync('git commit -m "Initial commit"', {
+        cwd: repoPath,
+        stdio: 'ignore',
+      })
 
       if (repo.isDirty) {
         // Make working tree dirty
@@ -65,7 +77,7 @@ export const createWorkspace = (fixture: WorkspaceFixture): string => {
 
     if (repo.hasConfig && repo.configRepos) {
       const configContent = generateConfig(repo.configRepos)
-      fs.writeFileSync(path.join(repoPath, 'dotdot.config.ts'), configContent)
+      fs.writeFileSync(path.join(repoPath, 'dotdot.json'), configContent)
     }
   }
 
@@ -77,29 +89,24 @@ export const cleanupWorkspace = (workspacePath: string): void => {
   fs.rmSync(workspacePath, { recursive: true, force: true })
 }
 
-/** Generate config file content - exports plain object since dotdot module isn't available in tests */
-const generateConfig = (repos: Record<string, { url: string; revision?: string }>): string => {
-  const repoEntries = Object.entries(repos)
-    .map(([name, config]) => {
-      const parts = [`url: '${config.url}'`]
-      if (config.revision) {
-        parts.push(`revision: '${config.revision}'`)
-      }
-      return `    '${name}': { ${parts.join(', ')} }`
-    })
-    .join(',\n')
-
-  return `export default {
-  repos: {
-${repoEntries}
-  },
-}
-`
+/** Generate JSON config file content */
+const generateConfig = (repos: Record<string, { url: string; rev?: string }>): string => {
+  const reposObj: Record<string, { url: string; rev?: string }> = {}
+  for (const [name, config] of Object.entries(repos)) {
+    reposObj[name] = { url: config.url }
+    if (config.rev) {
+      reposObj[name].rev = config.rev
+    }
+  }
+  return JSON.stringify({ repos: reposObj }, null, 2) + '\n'
 }
 
-/** Get the current git revision of a repo */
+/** Get the current git rev of a repo */
 export const getGitRev = (repoPath: string): string => {
-  return execSync('git rev-parse HEAD', { cwd: repoPath, encoding: 'utf-8' }).trim()
+  return execSync('git rev-parse HEAD', {
+    cwd: repoPath,
+    encoding: 'utf-8',
+  }).trim()
 }
 
 /** Create a bare git repository (for clone tests) */
@@ -115,12 +122,24 @@ export const createBareRepo = (name: string): string => {
   const tempRepoPath = path.join(tmpDir, 'temp-repo')
   fs.mkdirSync(tempRepoPath)
   execSync('git init', { cwd: tempRepoPath, stdio: 'ignore' })
-  execSync('git config user.email "test@test.com"', { cwd: tempRepoPath, stdio: 'ignore' })
-  execSync('git config user.name "Test"', { cwd: tempRepoPath, stdio: 'ignore' })
+  execSync('git config user.email "test@test.com"', {
+    cwd: tempRepoPath,
+    stdio: 'ignore',
+  })
+  execSync('git config user.name "Test"', {
+    cwd: tempRepoPath,
+    stdio: 'ignore',
+  })
   fs.writeFileSync(path.join(tempRepoPath, 'README.md'), `# ${name}\n`)
   execSync('git add .', { cwd: tempRepoPath, stdio: 'ignore' })
-  execSync('git commit -m "Initial commit"', { cwd: tempRepoPath, stdio: 'ignore' })
-  execSync(`git push ${repoPath} HEAD:main`, { cwd: tempRepoPath, stdio: 'ignore' })
+  execSync('git commit -m "Initial commit"', {
+    cwd: tempRepoPath,
+    stdio: 'ignore',
+  })
+  execSync(`git push ${repoPath} HEAD:main`, {
+    cwd: tempRepoPath,
+    stdio: 'ignore',
+  })
 
   // Clean up temp repo
   fs.rmSync(tempRepoPath, { recursive: true, force: true })
@@ -139,38 +158,35 @@ export const addCommit = (repoPath: string, message: string, filename?: string):
 
 /** Read the config file content */
 export const readConfig = (workspacePath: string): string => {
-  return fs.readFileSync(path.join(workspacePath, 'dotdot.config.ts'), 'utf-8')
+  return fs.readFileSync(path.join(workspacePath, 'dotdot.json'), 'utf-8')
 }
 
-/** Create symlink target directory with files */
-export const createExposeTarget = (repoPath: string, exposePath: string): void => {
-  const targetPath = path.join(repoPath, exposePath)
+/** Create package target directory with files */
+export const createPackageTarget = (repoPath: string, packagePath: string): void => {
+  const targetPath = path.join(repoPath, packagePath)
   fs.mkdirSync(path.dirname(targetPath), { recursive: true })
   fs.mkdirSync(targetPath, { recursive: true })
-  fs.writeFileSync(path.join(targetPath, 'exposed.txt'), 'exposed content\n')
+  fs.writeFileSync(path.join(targetPath, 'package.json'), '{"name": "test-package"}\n')
 }
 
-/** Generate config with expose field */
-export const generateConfigWithExpose = (
-  repos: Record<string, { url: string; revision?: string; expose?: string[] }>,
+type PackageConfig = { path: string; install?: string }
+
+/** Generate JSON config with packages field */
+export const generateConfigWithPackages = (
+  repos: Record<string, { url: string; rev?: string; packages?: Record<string, PackageConfig> }>,
 ): string => {
-  const repoEntries = Object.entries(repos)
-    .map(([name, config]) => {
-      const parts = [`url: '${config.url}'`]
-      if (config.revision) {
-        parts.push(`revision: '${config.revision}'`)
-      }
-      if (config.expose && config.expose.length > 0) {
-        parts.push(`expose: [${config.expose.map((e) => `'${e}'`).join(', ')}]`)
-      }
-      return `    '${name}': { ${parts.join(', ')} }`
-    })
-    .join(',\n')
-
-  return `export default {
-  repos: {
-${repoEntries}
-  },
-}
-`
+  const reposObj: Record<
+    string,
+    { url: string; rev?: string; packages?: Record<string, PackageConfig> }
+  > = {}
+  for (const [name, config] of Object.entries(repos)) {
+    reposObj[name] = { url: config.url }
+    if (config.rev) {
+      reposObj[name].rev = config.rev
+    }
+    if (config.packages && Object.keys(config.packages).length > 0) {
+      reposObj[name].packages = config.packages
+    }
+  }
+  return JSON.stringify({ repos: reposObj }, null, 2) + '\n'
 }

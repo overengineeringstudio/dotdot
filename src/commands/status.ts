@@ -11,11 +11,11 @@ import { FileSystem } from '@effect/platform'
 import { Array as A, Effect } from 'effect'
 
 import {
-  collectAllConfigs,
+  type ConfigSource,
   CurrentWorkingDirectory,
+  collectAllConfigs,
   findWorkspaceRoot,
   Git,
-  type ConfigSource,
   type RepoConfig,
 } from '../lib/mod.ts'
 
@@ -84,7 +84,7 @@ const getRepoStatus = (
       isGitRepo: false,
       declaredIn: info.declaredIn,
       config: info.config,
-      pinnedRev: info.config.revision,
+      pinnedRev: info.config.rev,
     }
 
     // Check if directory exists

@@ -1,7 +1,7 @@
 /**
  * Config file writer
  *
- * Writes/updates dotdot.config.ts files
+ * Writes/updates dotdot.json files
  */
 
 import path from 'node:path'
@@ -9,7 +9,14 @@ import path from 'node:path'
 import { FileSystem } from '@effect/platform'
 import { Effect, Schema } from 'effect'
 
-import { CONFIG_FILE_NAME, type DotdotConfig, type RepoConfig } from './config.ts'
+import {
+  CONFIG_FILE_NAME,
+  type DotdotConfig,
+  GENERATED_CONFIG_FILE_NAME,
+  GENERATED_CONFIG_WARNING,
+  JSON_SCHEMA_URL,
+  type RepoConfig,
+} from './config.ts'
 
 /** Error when writing config file fails */
 export class ConfigWriteError extends Schema.TaggedError<ConfigWriteError>()('ConfigWriteError', {
@@ -18,44 +25,13 @@ export class ConfigWriteError extends Schema.TaggedError<ConfigWriteError>()('Co
   cause: Schema.optional(Schema.Defect),
 }) {}
 
-/** Generate TypeScript config file content */
+/** Generate JSON config file content */
 const generateConfigContent = (config: DotdotConfig): string => {
-  const lines: string[] = []
-
-  lines.push(`import { defineConfig } from 'dotdot'`)
-  lines.push(``)
-  lines.push(`export default defineConfig({`)
-  lines.push(`  repos: {`)
-
-  const repoEntries = Object.entries(config.repos)
-  for (let i = 0; i < repoEntries.length; i++) {
-    const [name, repoConfig] = repoEntries[i]!
-    const props: string[] = []
-
-    props.push(`url: '${repoConfig.url}'`)
-
-    if (repoConfig.revision !== undefined) {
-      props.push(`revision: '${repoConfig.revision}'`)
-    }
-
-    if (repoConfig.install !== undefined) {
-      props.push(`install: '${repoConfig.install}'`)
-    }
-
-    if (repoConfig.expose !== undefined && repoConfig.expose.length > 0) {
-      const exposeStr = repoConfig.expose.map((e) => `'${e}'`).join(', ')
-      props.push(`expose: [${exposeStr}]`)
-    }
-
-    const comma = i < repoEntries.length - 1 ? ',' : ''
-    lines.push(`    '${name}': { ${props.join(', ')} }${comma}`)
+  const output: DotdotConfig = {
+    $schema: JSON_SCHEMA_URL,
+    repos: config.repos,
   }
-
-  lines.push(`  },`)
-  lines.push(`})`)
-  lines.push(``)
-
-  return lines.join('\n')
+  return JSON.stringify(output, null, 2) + '\n'
 }
 
 /** Write a config file */
@@ -106,11 +82,11 @@ export const removeRepo = (configPath: string, name: string, existingConfig: Dot
     return newConfig
   }).pipe(Effect.withSpan('config-writer/removeRepo'))
 
-/** Update a repo's revision in a config file */
-export const updateRepoRevision = (
+/** Update a repo's rev in a config file */
+export const updateRepoRev = (
   configPath: string,
   name: string,
-  revision: string,
+  rev: string,
   existingConfig: DotdotConfig,
 ) =>
   Effect.gen(function* () {
@@ -130,13 +106,13 @@ export const updateRepoRevision = (
         ...existingConfig.repos,
         [name]: {
           ...existingRepo,
-          revision,
+          rev,
         },
       },
     }
     yield* writeConfig(configPath, newConfig)
     return newConfig
-  }).pipe(Effect.withSpan('config-writer/updateRepoRevision'))
+  }).pipe(Effect.withSpan('config-writer/updateRepoRev'))
 
 /** Create an empty config file */
 export const createEmptyConfig = (dir: string) =>
@@ -146,3 +122,32 @@ export const createEmptyConfig = (dir: string) =>
     yield* writeConfig(configPath, config)
     return configPath
   }).pipe(Effect.withSpan('config-writer/createEmptyConfig'))
+
+/** Generate content for the generated config file */
+const generateGeneratedConfigContent = (config: DotdotConfig): string => {
+  const output = {
+    $schema: JSON_SCHEMA_URL,
+    _: GENERATED_CONFIG_WARNING,
+    repos: config.repos,
+  }
+  return JSON.stringify(output, null, 2) + '\n'
+}
+
+/** Write the generated (aggregated) config file */
+export const writeGeneratedConfig = (workspaceRoot: string, config: DotdotConfig) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    const configPath = path.join(workspaceRoot, GENERATED_CONFIG_FILE_NAME)
+    const content = generateGeneratedConfigContent(config)
+    yield* fs.writeFileString(configPath, content).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ConfigWriteError({
+            path: configPath,
+            message: 'Failed to write generated config file',
+            cause,
+          }),
+      ),
+    )
+    return configPath
+  }).pipe(Effect.withSpan('config-writer/writeGeneratedConfig'))

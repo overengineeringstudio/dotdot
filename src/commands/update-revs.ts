@@ -1,5 +1,5 @@
 /**
- * dotdot update command
+ * dotdot update-revs command
  *
  * Update pinned revisions to current HEAD
  */
@@ -12,18 +12,18 @@ import { Effect, Schema } from 'effect'
 
 import {
   CONFIG_FILE_NAME,
-  collectAllConfigs,
+  type ConfigSource,
   CurrentWorkingDirectory,
+  collectAllConfigs,
+  type DotdotConfig,
   findWorkspaceRoot,
   Git,
   loadConfigFile,
-  updateRepoRevision,
-  type ConfigSource,
-  type DotdotConfig,
+  updateRepoRev,
 } from '../lib/mod.ts'
 
 /** Error during update operation */
-export class UpdateError extends Schema.TaggedError<UpdateError>()('UpdateError', {
+export class UpdateRevsError extends Schema.TaggedError<UpdateRevsError>()('UpdateRevsError', {
   repo: Schema.String,
   message: Schema.String,
   cause: Schema.optional(Schema.Defect),
@@ -51,9 +51,9 @@ const findDeclaringConfig = (
   return configs.find((c) => c.config.repos[repoName])
 }
 
-/** Update command implementation */
-export const updateCommand = Cli.Command.make(
-  'update',
+/** Update-revs command implementation */
+export const updateRevsCommand = Cli.Command.make(
+  'update-revs',
   {
     repos: Cli.Args.text({ name: 'repos' }).pipe(
       Cli.Args.withDescription('Repos to update (defaults to all)'),
@@ -80,7 +80,10 @@ export const updateCommand = Cli.Command.make(
       // Collect all declared repos
       const declaredRepos = new Map<
         string,
-        { config: ConfigSource; repoConfig: (typeof configs)[0]['config']['repos'][string] }
+        {
+          config: ConfigSource
+          repoConfig: (typeof configs)[0]['config']['repos'][string]
+        }
       >()
       for (const source of configs) {
         for (const [name, repoConfig] of Object.entries(source.config.repos)) {
@@ -127,7 +130,11 @@ export const updateCommand = Cli.Command.make(
         // Check if repo exists
         const exists = yield* fs.exists(repoPath)
         if (!exists) {
-          results.push({ name, status: 'skipped', message: 'Directory does not exist' })
+          results.push({
+            name,
+            status: 'skipped',
+            message: 'Directory does not exist',
+          })
           yield* Effect.log(`  ${name}: skipped (directory does not exist)`)
           continue
         }
@@ -142,10 +149,15 @@ export const updateCommand = Cli.Command.make(
 
         // Get current revision
         const currentRev = yield* Git.getCurrentRev(repoPath)
-        const oldRev = repoConfig.revision
+        const oldRev = repoConfig.rev
 
         if (currentRev === oldRev) {
-          results.push({ name, status: 'unchanged', oldRev, newRev: currentRev })
+          results.push({
+            name,
+            status: 'unchanged',
+            oldRev,
+            newRev: currentRev,
+          })
           yield* Effect.log(`  ${name}: unchanged (${currentRev.slice(0, 7)})`)
           continue
         }
@@ -165,8 +177,8 @@ export const updateCommand = Cli.Command.make(
           modifiedConfigs.set(declaringConfig.path, configToModify)
         }
 
-        // Update the revision
-        const newConfig = yield* updateRepoRevision(
+        // Update the rev
+        const newConfig = yield* updateRepoRev(
           declaringConfig.path,
           name,
           currentRev,
@@ -192,5 +204,5 @@ export const updateCommand = Cli.Command.make(
       if (skipped > 0) summary.push(`${skipped} skipped`)
 
       yield* Effect.log(`Done: ${summary.join(', ')}`)
-    }).pipe(Effect.withSpan('dotdot/update')),
+    }).pipe(Effect.withSpan('dotdot/update-revs')),
 )

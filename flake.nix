@@ -21,31 +21,9 @@
         pkgsUnstable = import nixpkgsUnstable { inherit system; };
         gitRev = self.sourceInfo.dirtyShortRev or self.sourceInfo.shortRev or self.sourceInfo.rev or "unknown";
 
-        # Create a combined workspace source from flake inputs
-        # This allows the build to access both dotdot/ and effect-utils/ as siblings
-        # We use copies (not symlinks) because bun workspace resolution doesn't follow symlinks well
-        workspaceRoot = pkgs.runCommand "dotdot-workspace" {
-          nativeBuildInputs = [ pkgs.jq ];
-        } ''
-          mkdir -p $out
-          cp -r ${self}/. $out/dotdot/
-          cp -r ${effect-utils}/. $out/effect-utils/
-
-          # Copy bun.lock from effect-utils (it contains resolved deps)
-          cp ${effect-utils}/bun.lock $out/bun.lock
-
-          # Use effect-utils package.json as base, updating workspaces to include dotdot
-          # Also remove patchedDependencies since path would be wrong and dotdot doesn't need them
-          jq '.workspaces.packages = ["dotdot", "effect-utils/packages/**", "effect-utils/scripts/**", "effect-utils/context/**"] | del(.patchedDependencies)' \
-            ${effect-utils}/package.json > $out/package.json
-
-          # Copy tsconfig.base.json from dotdot (tsgo needs it at workspace root for extends resolution)
-          cp ${self}/tsconfig.base.json $out/tsconfig.base.json
-        '';
-
         mkBunCli = import (effect-utils + "/nix/mk-bun-cli.nix") {
           inherit pkgs pkgsUnstable;
-          src = workspaceRoot;
+          src = ./.;
         };
       in
       {
@@ -55,20 +33,36 @@
           binaryName = "dotdot";
           packageJsonPath = "dotdot/package.json";
           typecheckTsconfig = "dotdot/tsconfig.json";
-          projectRoot = "dotdot";
-          bunDepsHash = "sha256-+pw1/6Gl3YlkmTwXdYrFlk4WcJjHmFicwUFEfRRqV/M=";
-          workspaceDeps = [
-            { name = "@overeng/utils"; path = "effect-utils/packages/@overeng/utils"; }
+          sources = [
+            { name = "dotdot"; src = self; }
+            { name = "effect-utils"; src = effect-utils; }
           ];
+          installDirs = [
+            "dotdot"
+            "effect-utils/packages/@overeng/utils"
+          ];
+          bunDepsHash = "sha256-+pw1/6Gl3YlkmTwXdYrFlk4WcJjHmFicwUFEfRRqV/M=";
           inherit gitRev;
+        };
+
+        apps.update-bun-hashes = flake-utils.lib.mkApp {
+          drv = import ./nix/update-bun-hashes.nix { inherit pkgs; };
         };
 
         devShells.default = pkgs.mkShell {
           buildInputs = [
-            self.packages.${system}.default
+            # Note: Built CLI excluded from devShell to allow development when build is broken.
+            # Use `nix build` or `nix run .#default` to build/test the CLI package.
             effect-utils.packages.${system}.genie
             pkgsUnstable.bun
+            pkgsUnstable.oxlint
+            pkgsUnstable.oxfmt
+            pkgsUnstable.typescript-go
           ];
+
+          shellHook = ''
+            export WORKSPACE_ROOT="$PWD"
+          '';
         };
       });
 }

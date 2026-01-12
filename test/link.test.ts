@@ -12,10 +12,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { linkSubcommands } from '../src/commands/link.ts'
 import { CurrentWorkingDirectory } from '../src/lib/mod.ts'
 import {
-  createWorkspace,
   cleanupWorkspace,
-  createExposeTarget,
-  generateConfigWithExpose,
+  createPackageTarget,
+  createWorkspace,
+  generateConfigWithPackages,
 } from './fixtures/setup.ts'
 
 describe('link command', () => {
@@ -27,20 +27,23 @@ describe('link command', () => {
     }
   })
 
-  it('creates symlinks from expose config', async () => {
+  it('creates symlinks from packages config', async () => {
     workspacePath = createWorkspace({
       repos: [{ name: 'repo-a', isGitRepo: true }],
     })
 
-    // Create expose target
-    createExposeTarget(path.join(workspacePath, 'repo-a'), 'shared-lib')
+    // Create package target
+    createPackageTarget(path.join(workspacePath, 'repo-a'), 'shared-lib')
 
-    // Update config with expose
-    const configPath = path.join(workspacePath, 'dotdot.config.ts')
+    // Update config with packages
+    const configPath = path.join(workspacePath, 'dotdot.json')
     fs.writeFileSync(
       configPath,
-      generateConfigWithExpose({
-        'repo-a': { url: 'git@github.com:test/repo-a.git', expose: ['shared-lib'] },
+      generateConfigWithPackages({
+        'repo-a': {
+          url: 'git@github.com:test/repo-a.git',
+          packages: { 'shared-lib': { path: 'shared-lib' } },
+        },
       }),
     )
 
@@ -71,13 +74,16 @@ describe('link command', () => {
       repos: [{ name: 'repo-a', isGitRepo: true }],
     })
 
-    createExposeTarget(path.join(workspacePath, 'repo-a'), 'shared-lib')
+    createPackageTarget(path.join(workspacePath, 'repo-a'), 'shared-lib')
 
-    const configPath = path.join(workspacePath, 'dotdot.config.ts')
+    const configPath = path.join(workspacePath, 'dotdot.json')
     fs.writeFileSync(
       configPath,
-      generateConfigWithExpose({
-        'repo-a': { url: 'git@github.com:test/repo-a.git', expose: ['shared-lib'] },
+      generateConfigWithPackages({
+        'repo-a': {
+          url: 'git@github.com:test/repo-a.git',
+          packages: { 'shared-lib': { path: 'shared-lib' } },
+        },
       }),
     )
 
@@ -98,7 +104,7 @@ describe('link command', () => {
     expect(fs.existsSync(symlinkPath)).toBe(false)
   })
 
-  it('detects conflicts when multiple repos expose same path', async () => {
+  it('detects conflicts when multiple repos expose same package name', async () => {
     workspacePath = createWorkspace({
       repos: [
         { name: 'repo-a', isGitRepo: true },
@@ -106,15 +112,21 @@ describe('link command', () => {
       ],
     })
 
-    createExposeTarget(path.join(workspacePath, 'repo-a'), 'shared-lib')
-    createExposeTarget(path.join(workspacePath, 'repo-b'), 'shared-lib')
+    createPackageTarget(path.join(workspacePath, 'repo-a'), 'shared-lib')
+    createPackageTarget(path.join(workspacePath, 'repo-b'), 'shared-lib')
 
-    const configPath = path.join(workspacePath, 'dotdot.config.ts')
+    const configPath = path.join(workspacePath, 'dotdot.json')
     fs.writeFileSync(
       configPath,
-      generateConfigWithExpose({
-        'repo-a': { url: 'git@github.com:test/repo-a.git', expose: ['shared-lib'] },
-        'repo-b': { url: 'git@github.com:test/repo-b.git', expose: ['shared-lib'] },
+      generateConfigWithPackages({
+        'repo-a': {
+          url: 'git@github.com:test/repo-a.git',
+          packages: { 'shared-lib': { path: 'shared-lib' } },
+        },
+        'repo-b': {
+          url: 'git@github.com:test/repo-b.git',
+          packages: { 'shared-lib': { path: 'shared-lib' } },
+        },
       }),
     )
 
@@ -130,8 +142,9 @@ describe('link command', () => {
       Effect.runPromise,
     )
 
-    // Command should complete (reporting conflicts)
-    expect(true).toBe(true)
+    // Symlink should NOT be created due to conflict (without --force)
+    const symlinkPath = path.join(workspacePath, 'shared-lib')
+    expect(fs.existsSync(symlinkPath)).toBe(false)
   })
 
   it('force overwrites conflicts', async () => {
@@ -142,15 +155,21 @@ describe('link command', () => {
       ],
     })
 
-    createExposeTarget(path.join(workspacePath, 'repo-a'), 'shared-lib')
-    createExposeTarget(path.join(workspacePath, 'repo-b'), 'shared-lib')
+    createPackageTarget(path.join(workspacePath, 'repo-a'), 'shared-lib')
+    createPackageTarget(path.join(workspacePath, 'repo-b'), 'shared-lib')
 
-    const configPath = path.join(workspacePath, 'dotdot.config.ts')
+    const configPath = path.join(workspacePath, 'dotdot.json')
     fs.writeFileSync(
       configPath,
-      generateConfigWithExpose({
-        'repo-a': { url: 'git@github.com:test/repo-a.git', expose: ['shared-lib'] },
-        'repo-b': { url: 'git@github.com:test/repo-b.git', expose: ['shared-lib'] },
+      generateConfigWithPackages({
+        'repo-a': {
+          url: 'git@github.com:test/repo-a.git',
+          packages: { 'shared-lib': { path: 'shared-lib' } },
+        },
+        'repo-b': {
+          url: 'git@github.com:test/repo-b.git',
+          packages: { 'shared-lib': { path: 'shared-lib' } },
+        },
       }),
     )
 
@@ -177,19 +196,33 @@ describe('link command', () => {
       repos: [{ name: 'repo-a', isGitRepo: true }],
     })
 
-    createExposeTarget(path.join(workspacePath, 'repo-a'), 'shared-lib')
+    createPackageTarget(path.join(workspacePath, 'repo-a'), 'shared-lib')
 
-    const configPath = path.join(workspacePath, 'dotdot.config.ts')
+    const configPath = path.join(workspacePath, 'dotdot.json')
     fs.writeFileSync(
       configPath,
-      generateConfigWithExpose({
-        'repo-a': { url: 'git@github.com:test/repo-a.git', expose: ['shared-lib'] },
+      generateConfigWithPackages({
+        'repo-a': {
+          url: 'git@github.com:test/repo-a.git',
+          packages: { 'shared-lib': { path: 'shared-lib' } },
+        },
       }),
     )
 
-    // Create symlink manually first
+    // First create symlinks using the create command
+    await Effect.gen(function* () {
+      yield* linkSubcommands.create.handler({ dryRun: false, force: false })
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          PlatformNode.NodeContext.layer,
+          CurrentWorkingDirectory.fromPath(workspacePath),
+        ),
+      ),
+      Effect.runPromise,
+    )
+
     const symlinkPath = path.join(workspacePath, 'shared-lib')
-    fs.symlinkSync('repo-a/shared-lib', symlinkPath)
     expect(fs.existsSync(symlinkPath)).toBe(true)
 
     // Remove symlinks
@@ -214,19 +247,33 @@ describe('link command', () => {
       repos: [{ name: 'repo-a', isGitRepo: true }],
     })
 
-    createExposeTarget(path.join(workspacePath, 'repo-a'), 'shared-lib')
+    createPackageTarget(path.join(workspacePath, 'repo-a'), 'shared-lib')
 
-    const configPath = path.join(workspacePath, 'dotdot.config.ts')
+    const configPath = path.join(workspacePath, 'dotdot.json')
     fs.writeFileSync(
       configPath,
-      generateConfigWithExpose({
-        'repo-a': { url: 'git@github.com:test/repo-a.git', expose: ['shared-lib'] },
+      generateConfigWithPackages({
+        'repo-a': {
+          url: 'git@github.com:test/repo-a.git',
+          packages: { 'shared-lib': { path: 'shared-lib' } },
+        },
       }),
     )
 
-    // Create symlink manually first
+    // Create symlink first
+    await Effect.gen(function* () {
+      yield* linkSubcommands.create.handler({ dryRun: false, force: false })
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          PlatformNode.NodeContext.layer,
+          CurrentWorkingDirectory.fromPath(workspacePath),
+        ),
+      ),
+      Effect.runPromise,
+    )
+
     const symlinkPath = path.join(workspacePath, 'shared-lib')
-    fs.symlinkSync('repo-a/shared-lib', symlinkPath)
     expect(fs.existsSync(symlinkPath)).toBe(true)
 
     // Remove and then recreate
@@ -253,13 +300,16 @@ describe('link command', () => {
       repos: [{ name: 'repo-a', isGitRepo: true }],
     })
 
-    // Don't create the expose target
+    // Don't create the package target
 
-    const configPath = path.join(workspacePath, 'dotdot.config.ts')
+    const configPath = path.join(workspacePath, 'dotdot.json')
     fs.writeFileSync(
       configPath,
-      generateConfigWithExpose({
-        'repo-a': { url: 'git@github.com:test/repo-a.git', expose: ['nonexistent'] },
+      generateConfigWithPackages({
+        'repo-a': {
+          url: 'git@github.com:test/repo-a.git',
+          packages: { nonexistent: { path: 'nonexistent' } },
+        },
       }),
     )
 
@@ -280,7 +330,7 @@ describe('link command', () => {
     expect(fs.existsSync(symlinkPath)).toBe(false)
   })
 
-  it('handles empty expose config', async () => {
+  it('handles empty packages config', async () => {
     workspacePath = createWorkspace({
       repos: [],
     })
@@ -298,5 +348,46 @@ describe('link command', () => {
     )
 
     expect(true).toBe(true)
+  })
+
+  it('supports different package name than path', async () => {
+    workspacePath = createWorkspace({
+      repos: [{ name: 'repo-a', isGitRepo: true }],
+    })
+
+    // Create package at nested path
+    createPackageTarget(path.join(workspacePath, 'repo-a'), 'packages/utils')
+
+    const configPath = path.join(workspacePath, 'dotdot.json')
+    fs.writeFileSync(
+      configPath,
+      generateConfigWithPackages({
+        'repo-a': {
+          url: 'git@github.com:test/repo-a.git',
+          packages: { '@org/utils': { path: 'packages/utils' } },
+        },
+      }),
+    )
+
+    await Effect.gen(function* () {
+      yield* linkSubcommands.create.handler({ dryRun: false, force: false })
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          PlatformNode.NodeContext.layer,
+          CurrentWorkingDirectory.fromPath(workspacePath),
+        ),
+      ),
+      Effect.runPromise,
+    )
+
+    // Check symlink was created with package name (not path)
+    const symlinkPath = path.join(workspacePath, '@org/utils')
+    expect(fs.existsSync(symlinkPath)).toBe(true)
+    expect(fs.lstatSync(symlinkPath).isSymbolicLink()).toBe(true)
+
+    // Check symlink target is the nested path (relative from @org directory)
+    const linkTarget = fs.readlinkSync(symlinkPath)
+    expect(linkTarget).toBe('../repo-a/packages/utils')
   })
 })

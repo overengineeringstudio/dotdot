@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { statusCommand } from '../src/commands/mod.ts'
 import { CurrentWorkingDirectory } from '../src/lib/mod.ts'
-import { createWorkspace, cleanupWorkspace, getGitRev } from './fixtures/setup.ts'
+import { cleanupWorkspace, createWorkspace, getGitRev } from './fixtures/setup.ts'
 
 describe('status command', () => {
   let workspacePath: string
@@ -52,13 +52,17 @@ describe('status command', () => {
 
     // Pin the actual rev in the config
     const fs = await import('node:fs')
-    const configPath = `${workspacePath}/dotdot.config.ts`
-    const configContent = `export default {
-  repos: {
-    'repo-a': { url: 'git@github.com:test/repo-a.git', revision: '${rev}' }
-  },
-}
-`
+    const configPath = `${workspacePath}/dotdot.json`
+    const configContent =
+      JSON.stringify(
+        {
+          repos: {
+            'repo-a': { url: 'git@github.com:test/repo-a.git', rev: rev },
+          },
+        },
+        null,
+        2,
+      ) + '\n'
     fs.writeFileSync(configPath, configContent)
 
     const result = await Effect.gen(function* () {
@@ -160,7 +164,7 @@ describe('status command', () => {
       rootRepos: {
         'diverged-repo': {
           url: 'git@github.com:test/diverged-repo.git',
-          revision: 'abc1234567890',
+          rev: 'abc1234567890',
         },
       },
       repos: [{ name: 'diverged-repo', isGitRepo: true }],
