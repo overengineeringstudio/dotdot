@@ -1,0 +1,161 @@
+/**
+ * Config file loader
+ *
+ * Dynamically imports dotdot.config.ts files
+ */
+
+import path from 'node:path'
+
+import { FileSystem } from '@effect/platform'
+import { Effect, Schema } from 'effect'
+
+import { CONFIG_FILE_NAME, DotdotConfigSchema, type DotdotConfig } from './config.ts'
+
+/** Error when config file is invalid */
+export class ConfigError extends Schema.TaggedError<ConfigError>()('ConfigError', {
+  path: Schema.String,
+  message: Schema.String,
+  cause: Schema.optional(Schema.Defect),
+}) {}
+
+/** Source of a config file */
+export type ConfigSource = {
+  /** Absolute path to the config file */
+  path: string
+  /** Directory containing the config file */
+  dir: string
+  /** Whether this is the root workspace config */
+  isRoot: boolean
+  /** Parsed config */
+  config: DotdotConfig
+}
+
+/** Load and parse a dotdot.config.ts file */
+export const loadConfigFile = (configPath: string) =>
+  Effect.gen(function* () {
+    const absolutePath = path.resolve(configPath)
+
+    // Dynamically import the config file
+    const module = yield* Effect.tryPromise({
+      try: () => import(absolutePath),
+      catch: (cause) =>
+        new ConfigError({
+          path: absolutePath,
+          message: `Failed to import config file`,
+          cause: cause as Error,
+        }),
+    })
+
+    const rawConfig = module.default
+
+    // Validate against schema
+    const config = yield* Schema.decodeUnknown(DotdotConfigSchema)(rawConfig).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ConfigError({
+            path: absolutePath,
+            message: `Invalid config schema`,
+            cause,
+          }),
+      ),
+    )
+
+    return config
+  }).pipe(Effect.withSpan('loader/loadConfigFile'))
+
+/** Find the workspace root (directory containing dotdot.config.ts) */
+export const findWorkspaceRoot = (startDir: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    let currentDir = path.resolve(startDir)
+
+    while (currentDir !== '/') {
+      const configPath = path.join(currentDir, CONFIG_FILE_NAME)
+      const exists = yield* fs.exists(configPath)
+      if (exists) {
+        return currentDir
+      }
+      currentDir = path.dirname(currentDir)
+    }
+
+    return yield* Effect.fail(
+      new ConfigError({
+        path: startDir,
+        message: `Not a dotdot workspace (no ${CONFIG_FILE_NAME} found)`,
+      }),
+    )
+  }).pipe(Effect.withSpan('loader/findWorkspaceRoot'))
+
+/** Load root config from workspace */
+export const loadRootConfig = (workspaceRoot: string) =>
+  Effect.gen(function* () {
+    const configPath = path.join(workspaceRoot, CONFIG_FILE_NAME)
+    const fs = yield* FileSystem.FileSystem
+
+    const exists = yield* fs.exists(configPath)
+    if (!exists) {
+      // Return empty config if no root config file
+      return {
+        path: configPath,
+        dir: workspaceRoot,
+        isRoot: true,
+        config: { repos: {} },
+      } satisfies ConfigSource
+    }
+
+    const config = yield* loadConfigFile(configPath)
+    return {
+      path: configPath,
+      dir: workspaceRoot,
+      isRoot: true,
+      config,
+    } satisfies ConfigSource
+  }).pipe(Effect.withSpan('loader/loadRootConfig'))
+
+/** Load config from a repo directory (if it has one) */
+export const loadRepoConfig = (repoDir: string) =>
+  Effect.gen(function* () {
+    const configPath = path.join(repoDir, CONFIG_FILE_NAME)
+    const fs = yield* FileSystem.FileSystem
+
+    const exists = yield* fs.exists(configPath)
+    if (!exists) {
+      return null
+    }
+
+    const config = yield* loadConfigFile(configPath)
+    return {
+      path: configPath,
+      dir: repoDir,
+      isRoot: false,
+      config,
+    } satisfies ConfigSource
+  }).pipe(Effect.withSpan('loader/loadRepoConfig'))
+
+/** Collect all configs in workspace (root + repos that have their own) */
+export const collectAllConfigs = (workspaceRoot: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    const configs: ConfigSource[] = []
+
+    // Load root config
+    const rootConfig = yield* loadRootConfig(workspaceRoot)
+    configs.push(rootConfig)
+
+    // Scan directories for repo configs
+    const entries = yield* fs.readDirectory(workspaceRoot)
+    for (const entry of entries) {
+      if (entry.startsWith('.')) continue
+
+      const entryPath = path.join(workspaceRoot, entry)
+      const stat = yield* fs.stat(entryPath)
+      if (stat.type !== 'Directory') continue
+
+      const repoConfig = yield* loadRepoConfig(entryPath)
+      if (repoConfig) {
+        configs.push(repoConfig)
+      }
+    }
+
+    return configs
+  }).pipe(Effect.withSpan('loader/collectAllConfigs'))

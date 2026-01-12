@@ -1,0 +1,8 @@
+export { cloneCommand } from './clone.ts'
+export { execCommand } from './exec.ts'
+export { linkCommand } from './link.ts'
+export { pullCommand } from './pull.ts'
+export { restoreCommand } from './restore.ts'
+export { statusCommand } from './status.ts'
+export { treeCommand } from './tree.ts'
+export { updateCommand } from './update.ts'
